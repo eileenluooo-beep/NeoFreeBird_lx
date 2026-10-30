@@ -11,7 +11,7 @@ build_variant() {
     -fno-objc-arc -fmodules -fblocks -dynamiclib \
     -Wall -Wextra -Werror -Wno-unused-parameter \
     -DNFB_LOAD_ONLY="$load_only" \
-    -framework Foundation -framework UIKit -framework CoreFoundation -lobjc \
+    -framework Foundation -framework UIKit -framework CoreFoundation -framework CoreGraphics -lobjc \
     -Wl,-install_name,@rpath/"$name" \
     NFBActionBarDownload.m -o "$folder/$name"
   # The injector/signer must sign the library for the actual installation.

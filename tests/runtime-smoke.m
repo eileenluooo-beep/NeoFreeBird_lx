@@ -1,4 +1,5 @@
 #import <Foundation/Foundation.h>
+#import <CoreGraphics/CoreGraphics.h>
 #import "../NFBMethodLookup.h"
 #include <stdio.h>
 
@@ -23,6 +24,28 @@ static unsigned int NFBResolutions;
 @implementation NFBRuntimeProbeIntermediate
 @end
 
+typedef CGFloat (^NFBRuntimeCalculator)(id);
+
+@interface NFBRuntimeLayoutProbe : NSObject
+- (BOOL)isNarrowButton:(id)button;
+- (void)layoutAtOrigin:(CGPoint)origin
+         contentWidth:(CGFloat)width contentHeight:(CGFloat)height
+      widthCalculator:(NFBRuntimeCalculator)widthCalculator
+  alignmentCalculator:(NFBRuntimeCalculator)alignmentCalculator
+       minimumSpacing:(CGFloat)minimum maximumSpacing:(CGFloat)maximum
+     rightSidePadding:(BOOL)padding;
+@end
+
+@implementation NFBRuntimeLayoutProbe
+- (BOOL)isNarrowButton:(id)button { return NO; }
+- (void)layoutAtOrigin:(CGPoint)origin
+         contentWidth:(CGFloat)width contentHeight:(CGFloat)height
+      widthCalculator:(NFBRuntimeCalculator)widthCalculator
+  alignmentCalculator:(NFBRuntimeCalculator)alignmentCalculator
+       minimumSpacing:(CGFloat)minimum maximumSpacing:(CGFloat)maximum
+     rightSidePadding:(BOOL)padding {}
+@end
+
 static id NFBReplacementItem(id self, SEL command) { return @"replacement instance"; }
 static id NFBReplacementGlyph(id self, SEL command) { return @"replacement class"; }
 
@@ -35,6 +58,30 @@ static void NFBRequire(BOOL condition, const char* message) {
 
 int main(void) {
     @autoreleasepool {
+        Class layoutProbe = objc_getClass("NFBRuntimeLayoutProbe");
+        Method layout = NFBFindMethodWithoutResolving(layoutProbe,
+            @selector(layoutAtOrigin:contentWidth:contentHeight:widthCalculator:alignmentCalculator:minimumSpacing:maximumSpacing:rightSidePadding:));
+        const char* layoutArguments[] = {"@", ":", @encode(CGPoint), @encode(CGFloat),
+            @encode(CGFloat), "@?", "@?", @encode(CGFloat), @encode(CGFloat), @encode(BOOL)};
+        NFBRequire(NFBMethodHasSignature(layout, "v", 10, layoutArguments),
+                   "accept compatible layout hook ABI");
+        NFBRequire(!NFBMethodHasSignature(layout, "v", 9, layoutArguments),
+                   "reject changed argument count");
+        NFBRequire(!NFBMethodHasSignature(layout, "@", 10, layoutArguments),
+                   "reject changed return type");
+        layoutArguments[2] = @encode(CGFloat);
+        NFBRequire(!NFBMethodHasSignature(layout, "v", 10, layoutArguments),
+                   "reject CGPoint replaced by scalar");
+        layoutArguments[2] = @encode(CGPoint);
+        layoutArguments[5] = "@";
+        NFBRequire(!NFBMethodHasSignature(layout, "v", 10, layoutArguments),
+                   "reject block treated as ordinary object");
+        Method narrow = NFBFindMethodWithoutResolving(layoutProbe, @selector(isNarrowButton:));
+        const char* narrowArguments[] = {"@", ":", "@"};
+        NFBRequire(NFBMethodHasSignature(narrow, @encode(BOOL), 3, narrowArguments),
+                   "accept compatible narrow-button hook ABI");
+        NFBRequire(!NFBMethodHasSignature(NULL, "v", 10, layoutArguments),
+                   "reject missing private method");
         Class parent = objc_getClass("NFBRuntimeProbeIntermediate");
         SEL missing = sel_registerName("nfbMissingPrivateHostAPI");
         NFBRequire(NFBFindMethodWithoutResolving(Nil, missing) == NULL, "missing class");

@@ -42,6 +42,10 @@
 - (void)didTriggerAlternateAction;
 @end
 
+@protocol NFBActionBar <NSObject>
+- (NSArray*)inlineActionButtons;
+@end
+
 @protocol NFBDownloadPresenter <NSObject>
 - (void)presentDownloadOptionsForMediaEntities:(NSArray*)entities;
 @end
@@ -56,8 +60,13 @@
 @end
 
 typedef NSArray* (*NFBActionClassesIMP)(id, SEL, id, NSUInteger, NSUInteger, id);
+typedef BOOL (*NFBNarrowButtonIMP)(id, SEL, id);
+typedef void (*NFBLayoutButtonsIMP)(id, SEL, CGPoint, CGFloat, CGFloat,
+                                    id, id, CGFloat, CGFloat, BOOL);
 
 static NFBActionClassesIMP NFBOriginalActionClasses;
+static NFBNarrowButtonIMP NFBOriginalIsNarrowButton;
+static NFBLayoutButtonsIMP NFBOriginalLayoutButtons;
 static Class NFBDownloadButtonClass;
 static char NFBDownloadPresenterKey;
 
@@ -129,6 +138,11 @@ static BOOL NFBButtonShowsCount(id self, SEL command) {
     return NO;
 }
 
+static CGFloat NFBButtonExtraWidth(id self, SEL command) {
+    // The shortcut has a glyph but no counter; reserve no count/padding width.
+    return 0.0;
+}
+
 static NSUInteger NFBButtonVisibility(id self, SEL command) {
     return 1;
 }
@@ -194,8 +208,82 @@ static Class NFBCreateDownloadButton(void) {
     // UIKit accessibility methods are inherited. Preserve their actual encodings.
     NFBAddInheritedOverride(button, parent, NO, @selector(accessibilityLabel), (IMP)NFBButtonTitle);
     NFBAddInheritedOverride(button, parent, YES, @selector(buttonHoverImageNameForUIControlState:viewModel:options:account:), (IMP)NFBButtonImageName);
+    const char* metricArguments[] = {"@", ":"};
+    const char* metrics[] = {"extraWidth", "extraWidthWithStyle"};
+    for (NSUInteger index = 0; index < sizeof(metrics) / sizeof(metrics[0]); index++) {
+        SEL metric = sel_registerName(metrics[index]);
+        Method inherited = NFBFindMethodWithoutResolving(parent, metric);
+        if (NFBMethodHasSignature(inherited, @encode(CGFloat), 2, metricArguments)) {
+            NFBAddInheritedOverride(button, parent, NO, metric, (IMP)NFBButtonExtraWidth);
+        }
+    }
     objc_registerClassPair(button);
     return button;
+}
+
+static BOOL NFBIsDownloadButton(id button) {
+    return NFBDownloadButtonClass != Nil &&
+        [button isKindOfClass:NFBDownloadButtonClass];
+}
+
+static BOOL NFBActionBarHasDownloadButton(id self) {
+    if (![self respondsToSelector:@selector(inlineActionButtons)]) return NO;
+    id buttons = [(id<NFBActionBar>)self inlineActionButtons];
+    if (![buttons isKindOfClass:NSArray.class]) return NO;
+    for (id button in buttons) {
+        if (NFBIsDownloadButton(button)) return YES;
+    }
+    return NO;
+}
+
+static BOOL NFBIsNarrowButton(id self, SEL command, id button) {
+    if (NFBIsDownloadButton(button)) return YES;
+    return NFBOriginalIsNarrowButton(self, command, button);
+}
+
+static void NFBLayoutButtons(id self, SEL command, CGPoint origin,
+                             CGFloat contentWidth, CGFloat contentHeight,
+                             id widthCalculator, id alignmentCalculator,
+                             CGFloat minimumSpacing, CGFloat maximumSpacing,
+                             BOOL rightSidePadding) {
+    if (NFBActionBarHasDownloadButton(self)) {
+        // Let the host compute glyph/count widths, layout direction and hit
+        // regions. Only reduce blank spacing in rows with our seventh action.
+        minimumSpacing = MIN(MAX(minimumSpacing, 0.0), 4.0);
+        maximumSpacing = MAX(minimumSpacing, MIN(MAX(maximumSpacing, 0.0), 8.0));
+    }
+    NFBOriginalLayoutButtons(self, command, origin, contentWidth, contentHeight,
+                             widthCalculator, alignmentCalculator,
+                             minimumSpacing, maximumSpacing, rightSidePadding);
+}
+
+static void NFBInstallCompactLayout(Class actions) {
+    SEL narrowSelector = sel_registerName("_t1_isNarrowButton:");
+    Method narrow = NFBFindMethodWithoutResolving(actions, narrowSelector);
+    const char* narrowArguments[] = {"@", ":", "@"};
+    if (NFBMethodHasSignature(narrow, @encode(BOOL), 3, narrowArguments)) {
+        NFBOriginalIsNarrowButton = (NFBNarrowButtonIMP)method_getImplementation(narrow);
+        if (!class_addMethod(actions, narrowSelector, (IMP)NFBIsNarrowButton,
+                              method_getTypeEncoding(narrow))) {
+            NFBOriginalIsNarrowButton = (NFBNarrowButtonIMP)method_setImplementation(narrow, (IMP)NFBIsNarrowButton);
+        }
+    } else {
+        NSLog(@"[NFBActionBarDownload] Narrow-button API differs; classification unchanged.");
+    }
+
+    SEL layoutSelector = sel_registerName("_t1_layoutInlineActionButtonsAtOrigin:forContentWidth:contentHeight:buttonWidthCalculator:buttonAlignmentCalculator:minimumSpacing:maximumSpacing:shouldAddRightSidePadding:");
+    Method layout = NFBFindMethodWithoutResolving(actions, layoutSelector);
+    const char* layoutArguments[] = {"@", ":", @encode(CGPoint), @encode(CGFloat),
+        @encode(CGFloat), "@?", "@?", @encode(CGFloat), @encode(CGFloat), @encode(BOOL)};
+    if (NFBMethodHasSignature(layout, "v", 10, layoutArguments)) {
+        NFBOriginalLayoutButtons = (NFBLayoutButtonsIMP)method_getImplementation(layout);
+        if (!class_addMethod(actions, layoutSelector, (IMP)NFBLayoutButtons,
+                              method_getTypeEncoding(layout))) {
+            NFBOriginalLayoutButtons = (NFBLayoutButtonsIMP)method_setImplementation(layout, (IMP)NFBLayoutButtons);
+        }
+    } else {
+        NSLog(@"[NFBActionBarDownload] Layout API differs; native spacing unchanged.");
+    }
 }
 
 static NSUInteger NFBIndexOfClass(NSArray* classes, const char* name) {
@@ -238,6 +326,7 @@ static void NFBInstallActionBarShortcut(void) {
             NSLog(@"[NFBActionBarDownload] Native button API unavailable; shortcut not installed.");
             return;
         }
+        NFBInstallCompactLayout(actions);
         NFBOriginalActionClasses = (NFBActionClassesIMP)method_getImplementation(method);
         // Add a local override if the class inherited this method; otherwise
         // replace the class's own implementation and keep the existing chain.
@@ -245,7 +334,7 @@ static void NFBInstallActionBarShortcut(void) {
                              method_getTypeEncoding(method))) {
             NFBOriginalActionClasses = (NFBActionClassesIMP)method_setImplementation(method, (IMP)NFBInlineActionClasses);
         }
-        NSLog(@"[NFBActionBarDownload] Startup guard revision: shortcut installed.");
+        NSLog(@"[NFBActionBarDownload] Compact layout revision: shortcut installed.");
     }
 }
 

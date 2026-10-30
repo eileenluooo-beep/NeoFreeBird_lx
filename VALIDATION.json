@@ -1,7 +1,7 @@
 {
   "project": "NeoFreeBird action-bar media download shortcut",
   "type": "standalone companion dylib source",
-  "revision": "startup-guard-candidate-2-with-load-probe",
+  "revision": "compact-layout-candidate-4",
   "target": {
     "NeoFreeBird": "7.3.0",
     "X": "12.38.1",
@@ -24,6 +24,16 @@
   "buttonPosition": "before bookmark; before share if bookmark is hidden",
   "requiresExistingNeoFreeBird": true,
   "existingOverflowEntryPreserved": true,
+  "layoutChanges": {
+    "downloadButton": "narrow action without extra counter width",
+    "rowsContainingDownloadButton": {
+      "minimumSpacingCapPoints": 4,
+      "maximumSpacingCapPoints": 8
+    },
+    "privateLayoutHookABIValidatedBeforeInstallation": true,
+    "nativeWidthAlignmentAndHitTestingPreserved": true,
+    "otherRowsUseOriginalLayout": true
+  },
   "localChecks": {
     "gitDiffCheck": "pass",
     "bashSyntax": "pass",
@@ -42,15 +52,37 @@
     "crashReportReceived": false,
     "userReportsNoCurrentDayAnalyticsLog": true
   },
+  "candidate2Evidence": {
+    "sourceCommit": "53a1ab9bdde1b36ddbccdbeb0cfb7cf40f8cd423",
+    "workflowRunURL": "https://github.com/eileenluooo-beep/NeoFreeBird_lx/actions/runs/41018223303",
+    "jobId": 123939290986,
+    "macOSRuntimeRegression": "pass",
+    "iosCompilation": "both variants pass",
+    "signatureArchitectureAndHashChecks": "both variants pass",
+    "workflowConclusion": "failure at final linked-library comparison; artifacts not uploaded",
+    "observedDifference": "Only the shortcut links CoreFoundation automatically; the load-only probe does not",
+    "currentChange": "Explicit -framework CoreFoundation on both variants; Objective-C and runtime-test sources unchanged"
+  },
+  "previousWorkingRevision": {
+    "sourceCommit": "d386ebd5c2601ffb432265876589a74549294f34",
+    "workflowRunURL": "https://github.com/eileenluooo-beep/NeoFreeBird_lx/actions/runs/41018734962",
+    "workflowConclusion": "success",
+    "userDeviceFeedback": {
+      "appOpens": true,
+      "downloadButtonVisible": true,
+      "mediaDownloads": true
+    },
+    "reportedLayoutIssue": "wide spacing pushes the trailing share button beyond the right screen edge",
+    "evidenceScope": "user report and attached screenshot; no device operated by agent"
+  },
   "deviceOrVisualValidationExecuted": false,
-  "blocker": "Windows host has no Xcode; this revision requires macOS checks, compilation and device comparison; device crash report is unavailable",
+  "blocker": "Windows host has no Xcode; this revision requires macOS compilation, signature regression checks and device layout acceptance",
   "githubWorkflow": "Build download shortcut dylib",
   "knownValidationLimits": [
     "Private host interfaces have not been inspected on the user device",
-    "Native sizing, glyph, placement and interaction have not been visually verified",
-    "This candidate has not been compiled against an iPhoneOS SDK or run with the macOS regression fixture",
-    "Action type 131 is derived from a former UIButton implementation; native-base compatibility remains unverified",
-    "Startup defenses address identified hazards; the actual device crash root cause is unconfirmed",
-    "Both load probe and shortcut binaries remain uncompiled and untested on the device"
+    "The new compact spacing and width behavior have not been visually verified",
+    "The new source, link command and method-signature regression checks have not been executed on macOS",
+    "Previous user startup/download success does not cover all tweet types or this changed build",
+    "Private layout hooks are skipped on signature mismatch, so spacing can remain unchanged"
   ]
 }
