@@ -14,19 +14,31 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Build iOS arm64 dylib
+      - name: Check runtime registration and missing APIs
+        run: bash test-runtime.sh
+      - name: Build iOS arm64 load probe and shortcut
         run: |
           xcodebuild -version
           bash build.sh
       - name: Record build provenance
         run: |
-          printf '%s\n' "$GITHUB_SHA" > build/source-commit.txt
-          xcodebuild -version > build/xcode-version.txt
-          cp README.md build/
-      - name: Upload dylib
+          for folder in build/load-test build/shortcut; do
+            printf '%s\n' "$GITHUB_SHA" > "$folder/source-commit.txt"
+            xcodebuild -version > "$folder/xcode-version.txt"
+            cp README.md "$folder/"
+            cp .test-build/runtime-smoke.txt "$folder/"
+          done
+      - name: Upload load-only probe
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: NFBActionBarLoadProbe-arm64
+          path: build/load-test/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload shortcut dylib
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: NFBActionBarDownload-arm64
-          path: build/
+          path: build/shortcut/
           if-no-files-found: error
           retention-days: 14
