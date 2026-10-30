@@ -1,0 +1,30 @@
+{
+  "project": "NeoFreeBird action-bar media download shortcut",
+  "type": "standalone companion dylib source",
+  "target": {
+    "NeoFreeBird": "7.3.0",
+    "X": "12.38.1",
+    "iOSMinimum": "15.0",
+    "architecture": "arm64"
+  },
+  "buttonPosition": "before bookmark; before share if bookmark is hidden",
+  "requiresExistingNeoFreeBird": true,
+  "existingOverflowEntryPreserved": true,
+  "localChecks": {
+    "gitDiffCheck": "pass",
+    "bashSyntax": "pass",
+    "workflowYAML": "pass",
+    "workflowRunBlocksChecked": 2
+  },
+  "objectiveCCompilerExecuted": false,
+  "binaryProduced": false,
+  "githubActionsExecuted": false,
+  "deviceOrVisualValidationExecuted": false,
+  "blocker": "Windows host has no Xcode; a macOS build and target-device verification remain required",
+  "githubWorkflow": "Build download shortcut dylib",
+  "knownValidationLimits": [
+    "Private host interfaces have not been inspected on the user device",
+    "Native sizing, glyph, placement and interaction have not been visually verified",
+    "Objective-C source has been reviewed but not compiled against an iPhoneOS SDK"
+  ]
+}
