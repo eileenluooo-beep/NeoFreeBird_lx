@@ -6,6 +6,12 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
+#import <dispatch/dispatch.h>
+#import "NFBMethodLookup.h"
+
+#ifndef NFB_LOAD_ONLY
+#define NFB_LOAD_ONLY 0
+#endif
 
 @protocol NFBMediaViewModel <NSObject>
 - (NSArray*)representedMediaEntities;
@@ -106,8 +112,8 @@ static NSArray* NFBCurrentButtonMedia(id<NFBInlineAction> button) {
 
 static id NFBButtonInit(id<NFBInlineAction> self, SEL command, NSUInteger options,
                         id overrideSize, id account) {
-    // 131 is the custom download action type used by NeoFreeBird's former
-    // inline button. Keep the host's initializer, sizing, tint and animations.
+    // 131 comes from NeoFreeBird's former UIButton implementation. Its use with
+    // the native base initializer remains a target-device compatibility check.
     return [self initWithInlineActionType:131
                                 options:options
                            overrideSize:overrideSize
@@ -160,21 +166,11 @@ static void NFBButtonLongPressed(id self, SEL command, UILongPressGestureRecogni
     }
 }
 
-static BOOL NFBOverrideInheritedMethod(Class subclass, BOOL isClassMethod, SEL selector,
-                                        IMP implementation) {
-    Class destination = isClassMethod ? object_getClass(subclass) : subclass;
-    Method inherited = class_getInstanceMethod(destination, selector);
-    if (inherited == NULL) {
-        return NO;
-    }
-    return class_addMethod(destination, selector, implementation, method_getTypeEncoding(inherited));
-}
-
 static Class NFBCreateDownloadButton(void) {
     Class parent = objc_getClass("TTAStatusInlineActionButton");
     if (parent == Nil ||
-        ![parent instancesRespondToSelector:@selector(viewModel)] ||
-        ![parent instancesRespondToSelector:@selector(initWithInlineActionType:options:overrideSize:account:)]) {
+        NFBFindMethodWithoutResolving(parent, @selector(viewModel)) == NULL ||
+        NFBFindMethodWithoutResolving(parent, @selector(initWithInlineActionType:options:overrideSize:account:)) == NULL) {
         return Nil;
     }
     Class button = objc_allocateClassPair(parent, "NFBActionBarMediaDownloadButton", 0);
@@ -182,22 +178,22 @@ static Class NFBCreateDownloadButton(void) {
         return Nil;
     }
     BOOL ready =
-        NFBOverrideInheritedMethod(button, NO, @selector(initWithOptions:overrideSize:account:), (IMP)NFBButtonInit) &&
-        NFBOverrideInheritedMethod(button, YES, @selector(buttonImageNameForUIControlState:viewModel:options:account:), (IMP)NFBButtonImageName) &&
-        NFBOverrideInheritedMethod(button, NO, @selector(shouldShowCount), (IMP)NFBButtonShowsCount) &&
-        NFBOverrideInheritedMethod(button, NO, @selector(visibility), (IMP)NFBButtonVisibility) &&
-        NFBOverrideInheritedMethod(button, NO, @selector(enabled), (IMP)NFBButtonEnabled) &&
-        NFBOverrideInheritedMethod(button, NO, @selector(actionSheetTitle), (IMP)NFBButtonTitle) &&
-        NFBOverrideInheritedMethod(button, NO, @selector(didTap), (IMP)NFBButtonTapped) &&
-        NFBOverrideInheritedMethod(button, NO, @selector(didLongPressActionButton:), (IMP)NFBButtonLongPressed) &&
-        NFBOverrideInheritedMethod(button, NO, @selector(didTriggerAlternateAction), (IMP)NFBButtonTapped);
+        NFBAddInheritedOverride(button, parent, NO, @selector(initWithOptions:overrideSize:account:), (IMP)NFBButtonInit) &&
+        NFBAddInheritedOverride(button, parent, YES, @selector(buttonImageNameForUIControlState:viewModel:options:account:), (IMP)NFBButtonImageName) &&
+        NFBAddInheritedOverride(button, parent, NO, @selector(shouldShowCount), (IMP)NFBButtonShowsCount) &&
+        NFBAddInheritedOverride(button, parent, NO, @selector(visibility), (IMP)NFBButtonVisibility) &&
+        NFBAddInheritedOverride(button, parent, NO, @selector(enabled), (IMP)NFBButtonEnabled) &&
+        NFBAddInheritedOverride(button, parent, NO, @selector(actionSheetTitle), (IMP)NFBButtonTitle) &&
+        NFBAddInheritedOverride(button, parent, NO, @selector(didTap), (IMP)NFBButtonTapped) &&
+        NFBAddInheritedOverride(button, parent, NO, @selector(didLongPressActionButton:), (IMP)NFBButtonLongPressed) &&
+        NFBAddInheritedOverride(button, parent, NO, @selector(didTriggerAlternateAction), (IMP)NFBButtonTapped);
     if (!ready) {
         objc_disposeClassPair(button);
         return Nil;
     }
     // UIKit accessibility methods are inherited. Preserve their actual encodings.
-    NFBOverrideInheritedMethod(button, NO, @selector(accessibilityLabel), (IMP)NFBButtonTitle);
-    NFBOverrideInheritedMethod(button, YES, @selector(buttonHoverImageNameForUIControlState:viewModel:options:account:), (IMP)NFBButtonImageName);
+    NFBAddInheritedOverride(button, parent, NO, @selector(accessibilityLabel), (IMP)NFBButtonTitle);
+    NFBAddInheritedOverride(button, parent, YES, @selector(buttonHoverImageNameForUIControlState:viewModel:options:account:), (IMP)NFBButtonImageName);
     objc_registerClassPair(button);
     return button;
 }
@@ -228,11 +224,11 @@ static NSArray* NFBInlineActionClasses(id self, SEL command, id viewModel,
     return [[classes copy] autorelease];
 }
 
-__attribute__((constructor)) static void NFBInstallActionBarShortcut(void) {
+static void NFBInstallActionBarShortcut(void) {
     @autoreleasepool {
         Class actions = objc_getClass("TTAStatusInlineActionsView");
         SEL selector = sel_registerName("_t1_inlineActionViewClassesForViewModel:options:displayType:account:");
-        Method method = class_getClassMethod(actions, selector);
+        Method method = NFBFindMethodWithoutResolving(object_getClass(actions), selector);
         if (method == NULL) {
             NSLog(@"[NFBActionBarDownload] Inline action API unavailable; shortcut not installed.");
             return;
@@ -249,5 +245,19 @@ __attribute__((constructor)) static void NFBInstallActionBarShortcut(void) {
                              method_getTypeEncoding(method))) {
             NFBOriginalActionClasses = (NFBActionClassesIMP)method_setImplementation(method, (IMP)NFBInlineActionClasses);
         }
+        NSLog(@"[NFBActionBarDownload] Startup guard revision: shortcut installed.");
     }
+}
+
+__attribute__((constructor)) static void NFBQueueActionBarShortcut(void) {
+    // A separate artifact built with 1 tests the same library dependencies and
+    // signing pipeline without queueing work, inspecting X or installing hooks.
+    if (NFB_LOAD_ONLY) {
+        return;
+    }
+    // No host-class messages or subclass construction in the loader callback.
+    // Dispatch on the first main-queue turn after synchronous image loading.
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NFBInstallActionBarShortcut();
+    });
 }

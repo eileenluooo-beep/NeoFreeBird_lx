@@ -1,11 +1,25 @@
 {
   "project": "NeoFreeBird action-bar media download shortcut",
   "type": "standalone companion dylib source",
+  "revision": "startup-guard-candidate-2-with-load-probe",
   "target": {
     "NeoFreeBird": "7.3.0",
     "X": "12.38.1",
+    "reportedDeviceIOS": "17.2.1",
     "iOSMinimum": "15.0",
     "architecture": "arm64"
+  },
+  "buildVariants": {
+    "NFBActionBarLoadProbe-arm64": {
+      "file": "NFBActionBarLoadProbe.dylib",
+      "NFB_LOAD_ONLY": 1,
+      "installsHook": false
+    },
+    "NFBActionBarDownload-arm64": {
+      "file": "NFBActionBarDownload.dylib",
+      "NFB_LOAD_ONLY": 0,
+      "installsHook": true
+    }
   },
   "buttonPosition": "before bookmark; before share if bookmark is hidden",
   "requiresExistingNeoFreeBird": true,
@@ -14,17 +28,29 @@
     "gitDiffCheck": "pass",
     "bashSyntax": "pass",
     "workflowYAML": "pass",
-    "workflowRunBlocksChecked": 2
+    "workflowRunBlocksChecked": 3
   },
   "objectiveCCompilerExecuted": false,
   "binaryProduced": false,
   "githubActionsExecuted": false,
+  "macOSRuntimeRegressionExecuted": false,
+  "priorRevisionEvidence": {
+    "sourceCommit": "b44d017cbb822e374903a4314b0eb87e12e13178",
+    "workflowRunURL": "https://github.com/eileenluooo-beep/NeoFreeBird_lx/actions/runs/41013106834",
+    "buildConclusion": "success",
+    "deviceResult": "user reports immediate launch crash; disabling this add-on restores launch",
+    "crashReportReceived": false,
+    "userReportsNoCurrentDayAnalyticsLog": true
+  },
   "deviceOrVisualValidationExecuted": false,
-  "blocker": "Windows host has no Xcode; a macOS build and target-device verification remain required",
+  "blocker": "Windows host has no Xcode; this revision requires macOS checks, compilation and device comparison; device crash report is unavailable",
   "githubWorkflow": "Build download shortcut dylib",
   "knownValidationLimits": [
     "Private host interfaces have not been inspected on the user device",
     "Native sizing, glyph, placement and interaction have not been visually verified",
-    "Objective-C source has been reviewed but not compiled against an iPhoneOS SDK"
+    "This candidate has not been compiled against an iPhoneOS SDK or run with the macOS regression fixture",
+    "Action type 131 is derived from a former UIButton implementation; native-base compatibility remains unverified",
+    "Startup defenses address identified hazards; the actual device crash root cause is unconfirmed",
+    "Both load probe and shortcut binaries remain uncompiled and untested on the device"
   ]
 }
