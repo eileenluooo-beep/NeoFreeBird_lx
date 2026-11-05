@@ -8,3 +8,8 @@ xcrun --sdk macosx clang \
   -Wall -Wextra -Werror -Wno-unused-parameter \
   -framework Foundation -framework CoreGraphics tests/runtime-smoke.m -o .test-build/runtime-smoke
 .test-build/runtime-smoke | tee .test-build/runtime-smoke.txt
+xcrun --sdk macosx clang \
+  -isysroot "$sdk" -fobjc-arc -fblocks \
+  -Wall -Wextra -Werror -Wno-unused-parameter \
+  -framework Foundation NFBPhotoSupport.m tests/photo-support-smoke.m -o .test-build/photo-support-smoke
+.test-build/photo-support-smoke | tee .test-build/photo-support-smoke.txt

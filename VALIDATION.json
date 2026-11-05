@@ -1,7 +1,7 @@
 {
   "project": "NeoFreeBird action-bar media download shortcut",
   "type": "standalone companion dylib source",
-  "revision": "compact-layout-candidate-4",
+  "revision": "batch-photos-candidate-5",
   "target": {
     "NeoFreeBird": "7.3.0",
     "X": "12.38.1",
@@ -24,6 +24,15 @@
   "buttonPosition": "before bookmark; before share if bookmark is hidden",
   "requiresExistingNeoFreeBird": true,
   "existingOverflowEntryPreserved": true,
+  "photoBehavior": {
+    "photoOnlyPost": "one tap downloads and saves every photo attachment",
+    "mixedPost": "choose Save all photos or the existing video/GIF downloader",
+    "quality": "Twitter orig-size candidate, then the host-provided URL; bytes copied without recompression",
+    "photosPermission": "add-only preferred; use host-declared read/write level if add-only purpose string is absent; missing both strings is handled without requesting access",
+    "counting": "success count increments only after PhotoKit confirms each import",
+    "networking": "serial downloads; no host-account cookies, credentials or tokens",
+    "tapSnapshotAndDuplicateSuppression": true
+  },
   "layoutChanges": {
     "downloadButton": "narrow action without extra counter width",
     "rowsContainingDownloadButton": {
@@ -75,14 +84,21 @@
     "reportedLayoutIssue": "wide spacing pushes the trailing share button beyond the right screen edge",
     "evidenceScope": "user report and attached screenshot; no device operated by agent"
   },
+  "compactRevisionDeviceFeedback": {
+    "revision": "compact-layout-candidate-4",
+    "userConfirmedLayoutAndDownloadWorking": true,
+    "validationByAgentOnDevice": false
+  },
   "deviceOrVisualValidationExecuted": false,
-  "blocker": "Windows host has no Xcode; this revision requires macOS compilation, signature regression checks and device layout acceptance",
+  "photoURLRegressionExecuted": false,
+  "photoNetworkAndPhotosImportExecuted": false,
+  "blocker": "Windows host has no Xcode; this revision requires macOS regression checks, iPhoneOS compilation and device photo-import acceptance",
   "githubWorkflow": "Build download shortcut dylib",
   "knownValidationLimits": [
     "Private host interfaces have not been inspected on the user device",
-    "The new compact spacing and width behavior have not been visually verified",
-    "The new source, link command and method-signature regression checks have not been executed on macOS",
-    "Previous user startup/download success does not cover all tweet types or this changed build",
+    "The existing compact-layout functions are retained; the new photo flow has not been run on a device",
+    "The new mixed ARC/MRC build and photo URL regression checks have not been executed on macOS",
+    "Photos permissions, original-image availability, image formats and import results need target-device verification",
     "Private layout hooks are skipped on signature mismatch, so spacing can remain unchanged"
   ]
 }

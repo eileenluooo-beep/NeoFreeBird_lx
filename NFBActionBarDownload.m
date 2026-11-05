@@ -1,4 +1,4 @@
-// Adds a native inline shortcut to NeoFreeBird's existing video/GIF downloader.
+// Adds a native inline shortcut for photos and NeoFreeBird's video/GIF downloader.
 // Host API reference: NeoFreeBird/classdump and NeoFreeBird/app v7.3.0.
 // Compiled without ARC: initializer IMPs consume self and return +1; other
 // object-returning IMPs return borrowed/autoreleased values, as the host expects.
@@ -8,6 +8,8 @@
 #import <objc/runtime.h>
 #import <dispatch/dispatch.h>
 #import "NFBMethodLookup.h"
+#import "NFBPhotoSupport.h"
+#import "NFBPhotoDownloader.h"
 
 #ifndef NFB_LOAD_ONLY
 #define NFB_LOAD_ONLY 0
@@ -15,10 +17,6 @@
 
 @protocol NFBMediaViewModel <NSObject>
 - (NSArray*)representedMediaEntities;
-@end
-
-@protocol NFBMediaEntity <NSObject>
-- (NSInteger)mediaType;
 @end
 
 @protocol NFBInlineAction <NSObject>
@@ -71,17 +69,7 @@ static Class NFBDownloadButtonClass;
 static char NFBDownloadPresenterKey;
 
 static NSString* NFBDownloadTitle(void) {
-    Class<NFBBundleProvider> bundleClass = (Class)objc_getClass("BHTBundle");
-    if ([bundleClass respondsToSelector:@selector(sharedBundle)]) {
-        id<NFBBundleProvider> bundle = [bundleClass sharedBundle];
-        if ([bundle respondsToSelector:@selector(localizedStringForKey:)]) {
-            NSString* title = [bundle localizedStringForKey:@"DOWNLOAD_VIDEOS_TITLE"];
-            if (title.length > 0 && ![title isEqualToString:@"DOWNLOAD_VIDEOS_TITLE"]) {
-                return title;
-            }
-        }
-    }
-    return @"Download media";
+    return NFBPhotoText(@"下载媒体", @"Download media");
 }
 
 static BOOL NFBDownloadsEnabled(void) {
@@ -148,21 +136,14 @@ static NSUInteger NFBButtonVisibility(id self, SEL command) {
 }
 
 static BOOL NFBButtonEnabled(id self, SEL command) {
-    return NFBDownloadsEnabled() && NFBHasVideo(NFBCurrentButtonMedia(self));
+    return NFBDownloadsEnabled() && NFBHasDownloadableMedia(NFBCurrentButtonMedia(self));
 }
 
 static id NFBButtonTitle(id self, SEL command) {
     return NFBDownloadTitle();
 }
 
-static void NFBButtonTapped(id self, SEL command) {
-    if (!NFBDownloadsEnabled()) {
-        return;
-    }
-    NSArray* entities = NFBCurrentButtonMedia(self);
-    if (!NFBHasVideo(entities)) {
-        return;
-    }
+static void NFBPresentVideoDownloads(id self, NSArray* entities) {
     id<NFBDownloadPresenter> presenter = objc_getAssociatedObject(self, &NFBDownloadPresenterKey);
     if (presenter == nil) {
         presenter = [objc_getClass("DownloadInlineButton") new];
@@ -172,6 +153,22 @@ static void NFBButtonTapped(id self, SEL command) {
     }
     // Reuse the existing quality picker, multi-video menu, saving and progress.
     [presenter presentDownloadOptionsForMediaEntities:entities];
+}
+
+static void NFBButtonTapped(id self, SEL command) {
+    if (!NFBDownloadsEnabled()) return;
+    NSArray* entities = [[NFBCurrentButtonMedia(self) copy] autorelease];
+    if (!NFBHasDownloadableMedia(entities)) return;
+    if (NFBPhotoURLGroups(entities).count > 0) {
+        if (NFBHasVideo(entities)) {
+            [NFBPhotoDownloader handlePhotoTapWithMediaEntities:entities sourceView:self
+                videoHandler:^{ NFBPresentVideoDownloads(self, entities); }];
+        } else {
+            [NFBPhotoDownloader handlePhotoTapWithMediaEntities:entities sourceView:self videoHandler:nil];
+        }
+        return;
+    }
+    NFBPresentVideoDownloads(self, entities);
 }
 
 static void NFBButtonLongPressed(id self, SEL command, UILongPressGestureRecognizer* gesture) {
@@ -295,7 +292,7 @@ static NSArray* NFBInlineActionClasses(id self, SEL command, id viewModel,
                                       NSUInteger options, NSUInteger displayType, id account) {
     NSArray* original = NFBOriginalActionClasses(self, command, viewModel, options, displayType, account);
     if (![original isKindOfClass:NSArray.class] || NFBDownloadButtonClass == Nil ||
-        !NFBDownloadsEnabled() || !NFBHasVideo(NFBMediaEntities(viewModel)) ||
+        !NFBDownloadsEnabled() || !NFBHasDownloadableMedia(NFBMediaEntities(viewModel)) ||
         [original containsObject:NFBDownloadButtonClass]) {
         return original;
     }
@@ -334,7 +331,7 @@ static void NFBInstallActionBarShortcut(void) {
                              method_getTypeEncoding(method))) {
             NFBOriginalActionClasses = (NFBActionClassesIMP)method_setImplementation(method, (IMP)NFBInlineActionClasses);
         }
-        NSLog(@"[NFBActionBarDownload] Compact layout revision: shortcut installed.");
+        NSLog(@"[NFBActionBarDownload] Photo batch revision: shortcut installed.");
     }
 }
 
